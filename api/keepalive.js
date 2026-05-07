@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   const method = process.env.KEEPALIVE_METHOD || "GET";
-  const timeoutMs = Number(process.env.TIMEOUT_MS || 15000);
+  const timeoutMs = Number(process.env.TIMEOUT_MS || 60000);
   const expectedStatus = process.env.EXPECTED_STATUS
     ? Number(process.env.EXPECTED_STATUS)
     : null;

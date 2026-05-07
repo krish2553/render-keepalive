@@ -8,7 +8,7 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
 
     steps:
       - name: Check backend
@@ -17,12 +17,14 @@ jobs:
           KEEPALIVE_METHOD: ${{ secrets.KEEPALIVE_METHOD || 'GET' }}
           KEEPALIVE_AUTH_TOKEN: ${{ secrets.KEEPALIVE_AUTH_TOKEN }}
           EXPECTED_STATUS: ${{ secrets.EXPECTED_STATUS }}
-          TIMEOUT_MS: ${{ secrets.TIMEOUT_MS || '15000' }}
+          TIMEOUT_MS: ${{ secrets.TIMEOUT_MS || '60000' }}
+          MAX_ATTEMPTS: ${{ secrets.MAX_ATTEMPTS || '3' }}
         run: |
           node --input-type=module <<'NODE'
           const targetUrl = process.env.TARGET_URL;
           const method = process.env.KEEPALIVE_METHOD || "GET";
-          const timeoutMs = Number(process.env.TIMEOUT_MS || 15000);
+          const timeoutMs = Number(process.env.TIMEOUT_MS || 60000);
+          const maxAttempts = Number(process.env.MAX_ATTEMPTS || 3);
           const expectedStatus = process.env.EXPECTED_STATUS
             ? Number(process.env.EXPECTED_STATUS)
             : null;
@@ -32,8 +34,6 @@ jobs:
             process.exit(1);
           }
 
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), timeoutMs);
           const headers = {
             Accept: "application/json,text/plain,*/*",
             "User-Agent": "render-keepalive/1.0 (+github-actions)"
@@ -43,34 +43,62 @@ jobs:
             headers.Authorization = `Bearer ${process.env.KEEPALIVE_AUTH_TOKEN}`;
           }
 
-          try {
-            const response = await fetch(targetUrl, {
-              method,
-              headers,
-              cache: "no-store",
-              signal: controller.signal
-            });
-            const ok = expectedStatus ? response.status === expectedStatus : response.ok;
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-            console.log(
-              JSON.stringify(
-                {
-                  targetUrl,
-                  method,
-                  status: response.status,
-                  ok,
-                  checkedAt: new Date().toISOString()
-                },
-                null,
-                2
-              )
-            );
+            try {
+              const response = await fetch(targetUrl, {
+                method,
+                headers,
+                cache: "no-store",
+                signal: controller.signal
+              });
+              const ok = expectedStatus ? response.status === expectedStatus : response.ok;
 
-            process.exit(ok ? 0 : 1);
-          } catch (error) {
-            console.error(error instanceof Error ? error.message : String(error));
-            process.exit(1);
-          } finally {
-            clearTimeout(timeout);
+              console.log(
+                JSON.stringify(
+                  {
+                    targetUrl,
+                    method,
+                    attempt,
+                    maxAttempts,
+                    status: response.status,
+                    ok,
+                    checkedAt: new Date().toISOString()
+                  },
+                  null,
+                  2
+                )
+              );
+
+              if (ok) {
+                process.exit(0);
+              }
+            } catch (error) {
+              console.error(
+                JSON.stringify(
+                  {
+                    targetUrl,
+                    method,
+                    attempt,
+                    maxAttempts,
+                    ok: false,
+                    checkedAt: new Date().toISOString(),
+                    error: error instanceof Error ? error.message : String(error)
+                  },
+                  null,
+                  2
+                )
+              );
+            } finally {
+              clearTimeout(timeout);
+            }
+
+            if (attempt < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
           }
+
+          process.exit(1);
           NODE
