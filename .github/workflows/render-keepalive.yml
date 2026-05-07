@@ -1,0 +1,76 @@
+name: Render keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Check backend
+        env:
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          KEEPALIVE_METHOD: ${{ secrets.KEEPALIVE_METHOD || 'GET' }}
+          KEEPALIVE_AUTH_TOKEN: ${{ secrets.KEEPALIVE_AUTH_TOKEN }}
+          EXPECTED_STATUS: ${{ secrets.EXPECTED_STATUS }}
+          TIMEOUT_MS: ${{ secrets.TIMEOUT_MS || '15000' }}
+        run: |
+          node --input-type=module <<'NODE'
+          const targetUrl = process.env.TARGET_URL;
+          const method = process.env.KEEPALIVE_METHOD || "GET";
+          const timeoutMs = Number(process.env.TIMEOUT_MS || 15000);
+          const expectedStatus = process.env.EXPECTED_STATUS
+            ? Number(process.env.EXPECTED_STATUS)
+            : null;
+
+          if (!targetUrl) {
+            console.error("Missing TARGET_URL repository secret.");
+            process.exit(1);
+          }
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), timeoutMs);
+          const headers = {
+            Accept: "application/json,text/plain,*/*",
+            "User-Agent": "render-keepalive/1.0 (+github-actions)"
+          };
+
+          if (process.env.KEEPALIVE_AUTH_TOKEN) {
+            headers.Authorization = `Bearer ${process.env.KEEPALIVE_AUTH_TOKEN}`;
+          }
+
+          try {
+            const response = await fetch(targetUrl, {
+              method,
+              headers,
+              cache: "no-store",
+              signal: controller.signal
+            });
+            const ok = expectedStatus ? response.status === expectedStatus : response.ok;
+
+            console.log(
+              JSON.stringify(
+                {
+                  targetUrl,
+                  method,
+                  status: response.status,
+                  ok,
+                  checkedAt: new Date().toISOString()
+                },
+                null,
+                2
+              )
+            );
+
+            process.exit(ok ? 0 : 1);
+          } catch (error) {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+          } finally {
+            clearTimeout(timeout);
+          }
+          NODE
