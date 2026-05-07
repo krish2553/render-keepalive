@@ -54,7 +54,7 @@ jobs:
                 cache: "no-store",
                 signal: controller.signal
               });
-              const ok = expectedStatus ? response.status === expectedStatus : response.ok;
+              const ok = expectedStatus ? response.status === expectedStatus : response.status < 500;
 
               console.log(
                 JSON.stringify(
@@ -64,6 +64,7 @@ jobs:
                     attempt,
                     maxAttempts,
                     status: response.status,
+                    successRule: expectedStatus ? `status === ${expectedStatus}` : "status < 500",
                     ok,
                     checkedAt: new Date().toISOString()
                   },

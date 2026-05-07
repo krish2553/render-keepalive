@@ -34,13 +34,14 @@ export default async function handler(req, res) {
       signal: controller.signal
     });
 
-    const ok = expectedStatus ? response.status === expectedStatus : response.ok;
+    const ok = expectedStatus ? response.status === expectedStatus : response.status < 500;
 
     return res.status(ok ? 200 : 502).json({
       ok,
       targetUrl,
       method,
       status: response.status,
+      successRule: expectedStatus ? `status === ${expectedStatus}` : "status < 500",
       checkedAt: new Date().toISOString()
     });
   } catch (error) {

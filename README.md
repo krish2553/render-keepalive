@@ -13,7 +13,7 @@ GitHub Actions scheduled workflows can run as often as every 5 minutes. This rep
 4. Optional secrets:
    - `KEEPALIVE_METHOD`: defaults to `GET`
    - `KEEPALIVE_AUTH_TOKEN`: adds `Authorization: Bearer <token>`
-   - `EXPECTED_STATUS`: defaults to any 2xx response
+   - `EXPECTED_STATUS`: optional strict success status. Without it, any HTTP status below `500` counts as success because the backend was reached and woken up.
    - `TIMEOUT_MS`: defaults to `60000`
    - `MAX_ATTEMPTS`: defaults to `3`
 5. Open `Actions` -> `Render keepalive` -> `Run workflow` once to test it.

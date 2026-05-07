@@ -32,7 +32,7 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       signal: controller.signal
     });
 
-    const ok = expectedStatus ? response.status === expectedStatus : response.ok;
+    const ok = expectedStatus ? response.status === expectedStatus : response.status < 500;
     const bodyPreview = await response.text().then((body) => body.slice(0, 300)).catch(() => "");
 
     console.log(
@@ -43,6 +43,7 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
           attempt,
           maxAttempts,
           status: response.status,
+          successRule: expectedStatus ? `status === ${expectedStatus}` : "status < 500",
           ok,
           checkedAt: new Date().toISOString(),
           bodyPreview
